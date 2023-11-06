@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 require(tidyverse)
 require(caret)
 
-# Read the first CSV file into a data frame
+# Read the CSV file into a data frame
 rushing <- read.csv("https://github.com/ethan-j-xu/nfl-rushing-model/raw/main/NFL%202022-2023%20Rushing%20Data")
 
 # Rename columns for clarity, replace missing values in 'Attempts.Per.BrkTkl' with 0, filter for 'RB' positions, and remove rows with missing 'First.Downs'
