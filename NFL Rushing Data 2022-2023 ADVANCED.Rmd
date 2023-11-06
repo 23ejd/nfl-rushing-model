@@ -37,7 +37,6 @@ rushing <- rushing %>%
   mutate(Player = gsub("[*+]", "", Player))
 
 
-
 # Read the second CSV file into a new data frame
 secondrushing <- read.csv("C:\\Users\\falco\\OneDrive\\Desktop\\data\\NFL 2022-2023 Rushing Data - Sheet1.csv")
 
@@ -65,8 +64,9 @@ summary(yardsPrediction)
 ```
 
 ```{r}
+# Create Error column for differences between actual and predicted rushing yards
 rushing <- rushing %>%
-  mutate(Error = Rushing.Yards - predict(yardsPrediction))  # Create Error column for differences between actual and predicted rushing yards
+  mutate(Error = Rushing.Yards - predict(yardsPrediction))  
 
 rushing %>%
   ggplot(aes(x = Error)) + # Plot our findings, and visualize how frequently our model was off by a certain amount.
@@ -91,10 +91,10 @@ cv_results <- train(y = rushing$Rushing.Yards, x = rushing[, c("Age", "Rushing.A
 
 # Print the cross-validation results
 print(cv_results)
-
 ```
 
 ```{r}
+#Graph how accurate the predictions were for each of the four linear regression variables
 rushing %>%
   gather(key = "Variable", value = "Value", Age, Rushing.Attempts, First.Downs, Broken.Tackles) %>%
   ggplot(aes(x = Value, y = Error)) +
@@ -106,6 +106,7 @@ rushing %>%
 
 
 ```{r}
+#RMSE on the full data
 rushing %>%
   mutate(Error = Rushing.Yards - predict(yardsPrediction)) %>%
   mutate(sq_error = Error^2) %>% # Calculate the squared Error
@@ -136,7 +137,6 @@ for(i in 1:100) { # Loop 100 times
 } 
 
 mean(cvRes)
-
 ```
 
 ```{r}
@@ -161,7 +161,4 @@ rushing <- rushing %>%
 rushing %>%
   arrange(desc(Rushing.Yards)) %>%
   select(Player, Rushing.Yards, Predicted.Yards, Error)
-
 ```
-
-
