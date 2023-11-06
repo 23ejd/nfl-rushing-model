@@ -15,9 +15,9 @@ require(tidyverse)
 require(caret)
 
 # Read the first CSV file into a data frame
-rushing <- read.csv("https://github.com/23ejd/nfl-rushing-model/raw/main/NFL%202022-2023%20Rushing%20Data%20ADVANCED-%20Sheet1.csv.csv")
+rushing <- read.csv("https://github.com/ethan-j-xu/nfl-rushing-model/raw/main/NFL%202022-2023%20Rushing%20Data")
 
-# Rename columns for clarity
+# Rename columns for clarity, replace missing values in 'Attempts.Per.BrkTkl' with 0, filter for 'RB' positions, and remove rows with missing 'First.Downs'
 rushing <- rushing %>%
   rename('First.Downs' = 'X1D',
          'Rank' = 'Rk',
@@ -34,23 +34,12 @@ rushing <- rushing %>%
          'YAC.Attempts' = 'YAC.Att',
          'Broken.Tackles' = 'BrkTkl',
          'Attempts.Per.BrkTkl' = 'Att.Br') %>%
-  mutate(Player = gsub("[*+]", "", Player))
-
-
-# Read the second CSV file into a new data frame
-secondrushing <- read.csv("C:\\Users\\falco\\OneDrive\\Desktop\\data\\NFL 2022-2023 Rushing Data - Sheet1.csv")
-
-# Combine the data frames by binding columns
-rushing <- rushing %>%
-  bind_cols(secondrushing %>% select(Rushing.Success.Rate, Fumbles))
-
-# Replace missing values in 'Attempts.Per.BrkTkl' with 0, filter for 'RB' positions, and remove rows with missing 'First.Downs'
-rushing <- rushing %>%
+  
+  mutate(Player = gsub("[*+]", "", Player)) %>%
   mutate(Attempts.Per.BrkTkl = ifelse(is.na(Attempts.Per.BrkTkl), 0, Attempts.Per.BrkTkl)) %>%
   filter(Position == 'RB') %>%
-  drop_na(First.Downs) %>%
-  select(Rank, Player, Team, Age, Position, Rushing.Attempts, Rushing.Yards, First.Downs, Broken.Tackles)
-
+  drop_na(First.Downs) 
+ 
 # Display the resulting data frame
 rushing
 ```
