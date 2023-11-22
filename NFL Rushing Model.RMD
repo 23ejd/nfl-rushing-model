@@ -1,7 +1,7 @@
 ---
-title: "NFL 2022-2023 Rushing"
+title: "NFL RB Rushing Linear Regression Model"
 author: "Ethan Xu"
-date: "2023-11-04"
+date: "2023-09-22"
 output: html_document
 ---
 
@@ -10,144 +10,109 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-# Load the necessary R packages
+#Setup
 require(tidyverse)
 require(caret)
+df <- read.csv("C:\\Users\\falco\\OneDrive\\Desktop\\data\\NFL 2022-2023 Rushing Data - Sheet1.csv")
+df <- df %>%
+  filter(Postition == 'RB') %>%
+  mutate(Player = gsub("[*+]", "", Player))
+df
+```
+Hi
+```{r}
+suppressWarnings({ 
+library(ranger)
+rf_model <- ranger(Rushing.Yards ~ . - Rank - Player - School - Position -YPC - YPG, data = df, num.trees = 100, mtry = 5, importance = 'impurity')
 
-# Read the CSV file into a data frame
-rushing <- read.csv("https://github.com/ethan-j-xu/nfl-rushing-model/raw/main/NFL%202022-2023%20Rushing%20Data")
+variable_importance <- importance(rf_model)
 
-# Rename columns for clarity, replace missing values in 'Attempts.Per.BrkTkl' with 0, filter for 'RB' positions, and remove rows with missing 'First.Downs'
-rushing <- rushing %>%
-  rename('First.Downs' = 'X1D',
-         'Rank' = 'Rk',
-         'Team' = 'Tm',
-         'Position' = 'Pos',
-         'Games.Played' = 'G',
-         'Games.Started' = 'GS',
-         'Rushing.Attempts' = 'Att',
-         'Rushing.Yards' = 'Yds',
-         'TDs' = 'TD',
-         'Yards.Before.Contact' = 'YBC',
-         'YBC.Attempts' = 'YBC.Att',
-         'Yards.After.Contact' = 'YAC',
-         'YAC.Attempts' = 'YAC.Att',
-         'Broken.Tackles' = 'BrkTkl',
-         'Attempts.Per.BrkTkl' = 'Att.Br') %>%
-  
-  mutate(Player = gsub("[*+]", "", Player)) %>%
-  mutate(Attempts.Per.BrkTkl = ifelse(is.na(Attempts.Per.BrkTkl), 0, Attempts.Per.BrkTkl)) %>%
-  filter(Position == 'RB') %>%
-  drop_na(First.Downs) 
- 
-# Display the resulting data frame
-rushing
+sorted_importance <- sort(variable_importance, decreasing = TRUE)
+par(mar = c(10, 10, 2, 2))
+n_top_variables <- 10  # Adjust this to the number of top variables you want to display
+top_variables <- head(sorted_importance, n_top_variables)
+barplot(top_variables, main = "Top Variable Importance", xlab = "Importance Score", horiz = TRUE, las = 2)
+})
 ```
 
 ```{r}
-# Perform linear regression to predict 'Rushing.Yards' based on the selected variables
-yardsPrediction = lm(Rushing.Yards ~ Age + Rushing.Attempts + First.Downs + Broken.Tackles, data = rushing)
+cor(df %>% select(Rushing.Attempts, First.Downs, Rushing.TDs, Games.Started, Rushing.Success.Rate, Longest.Rushing.Attempt))
 
-# Print a summary of the linear regression results
+yardsPrediction = lm (Rushing.Yards ~ Rushing.Attempts + Rushing.Success.Rate, data = df)
 summary(yardsPrediction)
-```
 
-```{r}
-# Create Error column for differences between actual and predicted rushing yards
-rushing <- rushing %>%
-  mutate(Error = Rushing.Yards - predict(yardsPrediction))  
-
-rushing %>%
-  ggplot(aes(x = Error)) + # Plot our findings, and visualize how frequently our model was off by a certain amount.
-  geom_histogram(bins = 30) +
+df %>%
+  mutate(errors = Rushing.Yards - predict(yardsPrediction)) %>% # Create errors column for differences between actual and predicted future earnings 
+  ggplot(aes(x = errors)) + #Plot our findings, and visualize how frequently our model was off by a certain amount.
+  geom_histogram() +
   labs(x = 'Error Level',        # Label for x-axis
-       y = 'Frequency of Error Level',                # Label for y-axis
-       title = 'Accuracy of Rushing Yards Prediction Model', 
-       subtitle = '133 Running Backs')  # Subitle for the plot
+       y = 'Frequency of Errors Level',                # Label for y-axis
+       title = 'Accuracy of Rushing Yards Prediction Model')  # Title for the plot
+
+#Plots the predictions and residuals
+residuals_df <- data.frame(Residuals = resid(yardsPrediction), Predicted = predict(yardsPrediction))
+
+ggplot(residuals_df, aes(x = Predicted, y = Residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  # Add a dashed line at y = 0
+  labs(x = "Predicted Values", y = "Residuals") +
+  ggtitle("Residual Plot")
+
+df %>%
+  mutate(errors = Rushing.Yards - predict(yardsPrediction)) %>% # Create errors column for differences between actual and predicted future earnings 
+  ggplot(aes(x = Rushing.Attempts, y = errors)) + #Plot our findings, and visualize how accurate our model was for each level of rushing attempts
+  geom_point() +
+  geom_smooth() + #Add line of best fit
+  labs(x = 'Rushing.Attempts',        # Label for x-axis
+       y = 'Error Level',                # Label for y-axis
+       title = 'Accuracy of Rushings Yards Prediction Model by Rushing.Attempts')
+
+df %>%
+  mutate(errors = Rushing.Yards - predict(yardsPrediction)) %>% # Create errors column for differences between actual and predicted future earnings 
+  ggplot(aes(x = Rushing.Success.Rate, y = errors)) + #Plot our findings, and visualize how accurate our model was for each level of rushing success
+  geom_point() +
+  geom_smooth() + #Add line of best fit
+  labs(x = 'Rushing.Success.Rate',        # Label for x-axis
+       y = 'Error Level',                # Label for y-axis
+       title = 'Accuracy of Rushings Yards Prediction Model by Rushing.Success.Rate')
 ```
 
 ```{r}
-# Load the caret library
 library(caret)
+set.seed(123) # For reproducibility
 
-# Set a seed for reproducibility
-set.seed(123)
-
-# Create a cross-validation model using caret
-# Predict 'Rushing.Yards' using selected predictors 'Age', 'Rushing.Attempts', 'First.Downs', and 'Broken.Tackles'
-cv_results <- train(y = rushing$Rushing.Yards, x = rushing[, c("Age", "Rushing.Attempts", "First.Downs", "Broken.Tackles")], method = "lm",
-                    trControl = trainControl(method = "cv", number = 50))
-
-# Print the cross-validation results
+cv_results <- train(y = df$Rushing.Yards, x = df[, c("Rushing.Attempts", "Rushing.Success.Rate")], method = "lm", trControl = trainControl(method = "cv", number = 50))
 print(cv_results)
 ```
 
 ```{r}
-#Graph how accurate the predictions were for each of the four linear regression variables
-rushing %>%
-  gather(key = "Variable", value = "Value", Age, Rushing.Attempts, First.Downs, Broken.Tackles) %>%
-  ggplot(aes(x = Value, y = Error)) +
-  geom_point() +
-  geom_smooth() +
-  labs(x = "Variable", y = "Error Level", title = "Accuracy of Rushing Yards Prediction Model by Variable") +
-  facet_wrap(~Variable, scales = "free_x")
-```
-
-
-```{r}
-#RMSE on the full data
-rushing %>%
-  mutate(Error = Rushing.Yards - predict(yardsPrediction)) %>%
-  mutate(sq_error = Error^2) %>% # Calculate the squared Error
-  summarise(mean_sq = mean(sq_error)) %>% # Calculate the mean squared Error
+df %>%
+  mutate(errors = Rushing.Yards - predict(yardsPrediction)) %>%
+  mutate(sq_error = errors^2) %>% # Calculate the squared errors
+  summarise(mean_sq = mean(sq_error)) %>% # Calculate the mean squared errors
   mutate(sq_of_the_mean_sq = sqrt(mean_sq))
 
 #RMSE 100-fold CV
 set.seed(123)
 cvRes <- NULL # Instantiate an empty object to store data from the loop
 for(i in 1:100) { # Loop 100 times
-  inds <- sample(x = 1:nrow(rushing), # Sample from the row numbers of the rushing dataframe
-                 size = round(nrow(rushing)*0.8), # Set the size to be 80% of the total rows
+  inds <- sample(x = 1:nrow(df), # Sample from the row numbers of the movies_analysis dataframe
+                 size = round(nrow(df)*0.8), # Set the size to be 80% of the total rows (don't forget to round()!)
                  replace = FALSE) # Sample WITHOUT replacement
   
-  train <- rushing %>% slice(inds) # Use the 80% to get the training data
-  test <- rushing %>% slice(-inds) # Drop the 80% to get the test data
+  train <- df %>% slice(inds) # Use the 80% to get the training data
+  test <- df %>% slice(-inds) # Drop the 80% to get the test data
   
-  m <- lm (Rushing.Yards ~  Age + Rushing.Attempts + First.Downs + Broken.Tackles, data = rushing)
-
+  m <- lm(Rushing.Yards ~ Rushing.Attempts + Rushing.Success.Rate, data = train) # Train the model on the train data
   
-  test$Error <- predict(m, newdata = test) # Generate predicted values from the model
+  test$errors <- predict(m, newdata = test) # Generate predicted values from the model
   
-  e <- test$Rushing.Yards - test$Error # Calculate the Error as the true Y minus the predicted Y
-  se <- e^2 # Square the Error
-  mse <- mean(se) # Take the mean of the squared Error
-  rmse <- sqrt(mse) # Take the square root of the mean of the squared Error
+  e <- test$Rushing.Yards - test$errors # Calculate the errors as the true Y minus the predicted Y
+  se <- e^2 # Square the errors
+  mse <- mean(se) # Take the mean of the squared errors
+  rmse <- sqrt(mse) # Take the square root of the mean of the squared errors
   cvRes <- c(cvRes, rmse) # Append the rmse to the cvRes object
 } 
 
 mean(cvRes)
-```
-
-```{r}
-# Add Predicted.Yards to the dataframe
-rushing <- rushing %>% 
-  mutate(Predicted.Yards = predict(yardsPrediction))
-
-# Create a scatter plot of residuals vs. predicted values
-ggplot(rushing, aes(x = Predicted.Yards, y = Error)) +
-  geom_point() +  # Add data points to the plot
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  # Add a red dashed horizontal line at y = 0
-  labs(x = "Rushing Yards", 
-       y = "Error",
-       title = "Predicted Values for Rushing Yards",
-       subtitle = "133 Running Backs")  # Set labels and titles for the plot
-
-# Add a new variable 'Rushing.Category' based on 'Rushing.Yards' values
-rushing <- rushing %>% 
-  mutate(Rushing.Category = cut(Rushing.Yards, breaks = c(-Inf, 500, 1000, 1500, Inf), labels = 0:3))
-
-# Arrange the data frame in descending order of 'Rushing.Yards' and select specific columns
-rushing %>%
-  arrange(desc(Rushing.Yards)) %>%
-  select(Player, Rushing.Yards, Predicted.Yards, Error)
 ```
