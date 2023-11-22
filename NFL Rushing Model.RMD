@@ -11,19 +11,20 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 #Setup
+suppressWarnings({ 
 require(tidyverse)
 require(caret)
+require(ranger)
 df <- read.csv("https://github.com/ethan-j-xu/nfl-rushing-model/raw/main/NFL%202022-2023%20Rushing%20Data%20-%20Sheet1.csv")
 df <- df %>%
   filter(Postition == 'RB') %>%
   mutate(Player = gsub("[*+]", "", Player))
-df
+})
 ```
 
 ```{r}
 suppressWarnings({ 
-library(ranger)
-rf_model <- ranger(Rushing.Yards ~ . - Rank - Player - School - Position -YPC - YPG, data = df, num.trees = 100, mtry = 5, importance = 'impurity')
+rf_model <- ranger(Rushing.Yards ~ . -Team - Rank - Player - School - Position -YPC - YPG, data = df, num.trees = 100, mtry = 5, importance = 'impurity')
 
 variable_importance <- importance(rf_model)
 
@@ -32,19 +33,22 @@ par(mar = c(10, 10, 2, 2))
 n_top_variables <- 10  # Adjust this to the number of top variables you want to display
 top_variables <- head(sorted_importance, n_top_variables)
 barplot(top_variables, main = "Top Variable Importance", xlab = "Importance Score", horiz = TRUE, las = 2)
+{}
 })
 ```
 
 ```{r}
-cor(df %>% select(Rushing.Attempts, First.Downs, Rushing.TDs, Games.Started, Rushing.Success.Rate, Longest.Rushing.Attempt))
+cor(df %>% select(Rushing.Attempts, First.Downs, Rushing.TDs, Games.Started, Fumbles, Games.Played, Rushing.Success.Rate, Longest.Rushing.Attempt, Age))
 
 yardsPrediction = lm (Rushing.Yards ~ Rushing.Attempts + Rushing.Success.Rate, data = df)
 summary(yardsPrediction)
 
+df <- df %>%
+  mutate(errors = Rushing.Yards - predict(yardsPrediction))# Create errors column for differences between actual and predicted future earnings 
+
 df %>%
-  mutate(errors = Rushing.Yards - predict(yardsPrediction)) %>% # Create errors column for differences between actual and predicted future earnings 
   ggplot(aes(x = errors)) + #Plot our findings, and visualize how frequently our model was off by a certain amount.
-  geom_histogram() +
+  geom_histogram(bins = 40) +
   labs(x = 'Error Level',        # Label for x-axis
        y = 'Frequency of Errors Level',                # Label for y-axis
        title = 'Accuracy of Rushing Yards Prediction Model')  # Title for the plot
@@ -59,7 +63,6 @@ ggplot(residuals_df, aes(x = Predicted, y = Residuals)) +
   ggtitle("Residual Plot")
 
 df %>%
-  mutate(errors = Rushing.Yards - predict(yardsPrediction)) %>% # Create errors column for differences between actual and predicted future earnings 
   ggplot(aes(x = Rushing.Attempts, y = errors)) + #Plot our findings, and visualize how accurate our model was for each level of rushing attempts
   geom_point() +
   geom_smooth() + #Add line of best fit
@@ -68,7 +71,6 @@ df %>%
        title = 'Accuracy of Rushings Yards Prediction Model by Rushing.Attempts')
 
 df %>%
-  mutate(errors = Rushing.Yards - predict(yardsPrediction)) %>% # Create errors column for differences between actual and predicted future earnings 
   ggplot(aes(x = Rushing.Success.Rate, y = errors)) + #Plot our findings, and visualize how accurate our model was for each level of rushing success
   geom_point() +
   geom_smooth() + #Add line of best fit
@@ -86,6 +88,7 @@ print(cv_results)
 ```
 
 ```{r}
+#RMSE Whole Data
 df %>%
   mutate(errors = Rushing.Yards - predict(yardsPrediction)) %>%
   mutate(sq_error = errors^2) %>% # Calculate the squared errors
