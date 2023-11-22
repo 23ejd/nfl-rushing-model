@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 #Setup
 require(tidyverse)
 require(caret)
-df <- read.csv("C:\\Users\\falco\\OneDrive\\Desktop\\data\\NFL 2022-2023 Rushing Data - Sheet1.csv")
+df <- read.csv("https://github.com/ethan-j-xu/nfl-rushing-model/raw/main/NFL%202022-2023%20Rushing%20Data%20-%20Sheet1.csv")
 df <- df %>%
   filter(Postition == 'RB') %>%
   mutate(Player = gsub("[*+]", "", Player))
