@@ -19,7 +19,7 @@ df <- df %>%
   mutate(Player = gsub("[*+]", "", Player))
 df
 ```
-Hi
+
 ```{r}
 suppressWarnings({ 
 library(ranger)
