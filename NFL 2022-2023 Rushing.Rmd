@@ -1,0 +1,205 @@
+---
+title: "NFL RB Rushing Linear Regression Model"
+author: "Ethan Xu"
+date: "2023-09-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Stage 0: Background
+I started this project as a way to apply my knowledge from DS 1000 and challenge my abilities. As a lifelong fan of football, I decided that determining what factors affect an running back's total yardage would be an enjoyable and complex challenge. Since football culture revolves heavily around a player's statistics and discussion of said stats, it seemed fitting to apply my data science knowledge to this topic. 
+
+I chose a linear regression model, as I wanted a simple way to use continuous data (independent variables) to predict a continuous variable (our dependent variable). This approach led to me dividing this project into four stages: Setup, Training, Plotting, and Conclusions. Setup will consist of light data cleaning and determining which factors will be relevant for our regression. After that, Training will involve of the linear regression, alongside testing and analyzing its performance. Next, Plotting will consist of visualizing our errors and residuals, along with graphing our independent variables and seeing how they performed in our regression. Finally, Conclusions will consist of my interpretation of the model, and my closing thoughts.
+
+# Stage 1: Setup
+
+Firstly, I loaded all necessary packages and read in my CSV file, consisting of all NFL rushing data. After that, I filtered for just players designated as running backs (RB) and removed any special characters from the ends of their name for clarity. (The characters dictated honors and awards, which is irrelevant to our experiment). 
+```{r}
+# Setup: Load necessary libraries and suppress warnings
+suppressWarnings({
+  require(tidyverse)  # Load the tidyverse package for data manipulation and visualization
+  require(caret)      # Load the caret package for machine learning tools
+  require(ranger)     # Load the ranger package for random forest modeling
+  
+  # Read the rushing data from the provided URL
+  rushing <- read.csv("https://github.com/ethan-j-xu/nfl-rushing-model/raw/main/NFL%202022-2023%20Rushing%20Data.csv")
+  
+  # Rename several columns
+  rushing <- rushing %>%
+    rename(Rank = Rk,
+           Team = Tm,
+           Position = Pos,
+           Games.Played = G,
+           Games.Started = GS,
+           Rushing.Attempts = Att,
+           Rushing.Yards = Yds,
+           Rushing.TDs = TDs,
+           First.Downs = X1D,
+           Rushing.Success.Rate = Succ.,
+           Longest.Rushing.Attempt = Lng,
+           YPC = Y.A,
+           YPG = Y.G,
+           Fumbles = Fmb
+           ) %>%
+    
+    # Filter the data to include only running backs (RB) and remove special characters from the 'Player' column
+    filter(Position == 'RB') %>%
+    mutate(Player = gsub("[*+]", "", Player))  # Remove asterisks and plus signs from the 'Player' column
+})
+```
+
+Finally, I checked the first ten rows of the data set to ensure that my cleaning was successful.
+```{r}
+head(rushing, 10) # Check the first ten rows of the data set
+```
+
+I opted to use a random forest in order to determine the best factors for my linear regression. I took out irrelevant variables such as the player's team, and factors that directly correlated with rushing yards such as yards per game.
+```{r}
+suppressWarnings({ 
+rf_model <- ranger(Rushing.Yards ~ . -Team - Rank - Player - Position -YPC - YPG, data = rushing, num.trees = 100, mtry = 5, importance = 'impurity')
+
+variable_importance <- importance(rf_model)
+
+sorted_importance <- sort(variable_importance, decreasing = TRUE)
+par(mar = c(10, 10, 2, 2))
+n_top_variables <- 10  # Adjust this to the number of top variables you want to display
+top_variables <- head(sorted_importance, n_top_variables)
+barplot(top_variables, main = "Top Variable Importance", xlab = "Importance Score", horiz = TRUE, las = 2)
+{}
+})
+```
+
+
+After the random forest, I checked the correlation of the top ten factors. Unfortunately, many of the variables had a high correlation with each other, which I opted to define as being higher than 0.5. Given my domain knowledge of football, I focused on keeping the Rushing.Attempts factor, along with taking factors which appeared to be independent of it, namely Rushing.Success.Rate and Age.
+```{r}
+cor(rushing %>% select(Rushing.Attempts, First.Downs, Games.Started, Rushing.TDs, Longest.Rushing.Attempt, Fumbles, Rushing.Success.Rate, Games.Played, Age)) # Check correlation
+```
+
+# Stage 2: Training
+
+My linear regression returned an R-squared of 0.9767, indicating that my three factors performed well at predicting Rushing.Yards. Of the three, Rushing.Attempts was by far the most impactful (4.50941), with Rushing.Success.Rate having a positive relationship (0.73891) as Rushing.Yards increased and Age having a negative relationship (-1.39998). 
+```{r}
+yardsPrediction = lm (Rushing.Yards ~ Rushing.Attempts + Rushing.Success.Rate + Age, data = rushing)
+summary(yardsPrediction) # Run the linear regression
+```
+
+However, Age had an extremely high p-value at 0.4897, so I opted to remove it.
+```{r}
+yardsPrediction = lm (Rushing.Yards ~ Rushing.Attempts + Rushing.Success.Rate, data = rushing) # Remove 'Age' from the regression
+summary(yardsPrediction) #Summarise the regression
+```
+
+This cross-validation helps ensure the quality of my regression.  In the context of predicting NFL running back rushing yards, an RMSE of 51.81 means that, on average, the model's predictions differ from the actual values by approximately 51.81 yards. 
+```{r}
+# Set seed for reproducibility
+set.seed(123)
+
+# Train a linear regression model using cross-validation
+# Predict Rushing.Yards using Rushing.Attempts and Rushing.Success.Rate
+# Perform 50-fold cross-validation
+cv_results <- train(
+  y = rushing$Rushing.Yards,
+  x = rushing[, c("Rushing.Attempts", "Rushing.Success.Rate")],
+  method = "lm",
+  trControl = trainControl(method = "cv", number = 50)
+)
+
+# Print the results of the cross-validated linear regression model
+print(cv_results)
+```
+
+To check for overfitting, I calculated the RMSE on the full data, and then on a 80% sample of the dataframe.
+```{r}
+#RMSE Whole Data
+set.seed(123)
+rushing %>%
+  mutate(errors = Rushing.Yards - predict(yardsPrediction)) %>%
+  mutate(sq_error = errors^2) %>% # Calculate the squared errors
+  summarise(mean_sq = mean(sq_error)) %>% # Calculate the mean squared errors
+  mutate(sq_of_the_mean_sq = sqrt(mean_sq))
+```
+
+```{r}
+#RMSE 100-fold CV
+cvRes <- NULL # Instantiate an empty object to store data from the loop
+for(i in 1:100) { # Loop 100 times
+  inds <- sample(x = 1:nrow(rushing), # Sample from the row numbers of the rushing dataframe
+                 size = round(nrow(rushing)*0.8), # Set the size to be 80% of the total rows (don't forget to round()!)
+                 replace = FALSE) # Sample WITHOUT replacement
+  
+  train <- rushing %>% slice(inds) # Use the 80% to get the training data
+  test <- rushing %>% slice(-inds) # Drop the 80% to get the test data
+  
+  m <- lm(Rushing.Yards ~ Rushing.Attempts + Rushing.Success.Rate, data = train) # Train the model on the train data
+  
+  test$errors <- predict(m, newdata = test) # Generate predicted values from the model
+  
+  e <- test$Rushing.Yards - test$errors # Calculate the errors as the true Y minus the predicted Y
+  se <- e^2 # Square the errors
+  mse <- mean(se) # Take the mean of the squared errors
+  rmse <- sqrt(mse) # Take the square root of the mean of the squared errors
+  cvRes <- c(cvRes, rmse) # Append the rmse to the cvRes object
+} 
+
+mean(cvRes)
+```
+With the a different of 0.61664 between my full and test data, I concluded that my model was not overfitted.
+
+# Stage 3: Plotting
+
+This graph shows all the errors in my regression. Overall, most predictions were within 100 yards, though there were some notable outliers that were close to -/+ yards.
+```{r}
+rushing <- rushing %>%
+  mutate(errors = Rushing.Yards - predict(yardsPrediction))# Create errors column for differences between actual and predicted yards 
+
+rushing %>%
+  ggplot(aes(x = errors)) + #Plot our findings, and visualize how frequently our model was off by a certain amount.
+  geom_histogram(bins = 40) +
+  labs(x = 'Error Level',        # Label for x-axis
+       y = 'Frequency of Errors Level',                # Label for y-axis
+       title = 'Accuracy of Rushing Yards Prediction Model')  # Title for the plot
+```
+
+Through plotting the residuals, we can see that as Rushing.Yards increased, our model became less accurate. Our model was best at predicting running backs with a lower rushing total, as we were able to predict almost every sub-500 rusher within 100 yards.
+```{r}
+#Plots the predictions and residuals
+residuals_rushing <- data.frame(Residuals = resid(yardsPrediction), Predicted = predict(yardsPrediction))
+
+ggplot(residuals_rushing, aes(x = Predicted, y = Residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  # Add a dashed line at y = 0
+  labs(x = "Predicted Values", y = "Residuals") +
+  ggtitle("Residual Plot")
+```
+
+I included two scatterplots to check how my model performed by variable. Rushing.Attempts performed best as lower levels and became more inaccurate, notably taper off around the 250 mark. 
+```{r}
+rushing %>%
+  ggplot(aes(x = Rushing.Attempts, y = errors)) + #Plot our findings, and visualize how accurate our model was for each level of rushing attempts
+  geom_point() +
+  geom_smooth() + #Add line of best fit
+  labs(x = 'Rushing.Attempts',        # Label for x-axis
+       y = 'Error Level',                # Label for y-axis
+       title = 'Accuracy of Rushings Yards Prediction Model by Rushing.Attempts')
+```
+
+Rushing.Success.Rate had a much different graph. Our lowest residuals came around the 40-60 mark, with both lower and higher levels of Rushing.Success.Rate having high residuals.
+```{r}
+
+rushing %>%
+  ggplot(aes(x = Rushing.Success.Rate, y = errors)) + #Plot our findings, and visualize how accurate our model was for each level of rushing success
+  geom_point() +
+  geom_smooth() + #Add line of best fit
+  labs(x = 'Rushing.Success.Rate',        # Label for x-axis
+       y = 'Error Level',                # Label for y-axis
+       title = 'Accuracy of Rushings Yards Prediction Model by Rushing.Success.Rate')
+```
+
+# Stage 4: Conclusions
+Overall, all metrics indicated that my model was sound and accurate. Between a low RMSE and high R-squared, my model appears to successfully perform its role of predicting NFL rushing yards. However, it is important to note that the model performed better on 'worse' (less productive players), while struggling more for 'better' (more productive players). This may indicate that I was missing a factor that was not present in my dataset, that would explain what distinguishes these high performing players from the rest of the league. 
+
+Additionally, the fact that I was only able to use two factors is an area of concern. A similar regression developed by a classmate regarding NFL receiving yards successfully integrated several more factors from their respective data set, including advanced metrics such as ADOT (Average Depth of Pass) and Broken Tackles. Between the limited data in my data set, the inherently less complicated role of running backs, and my own lack of data science experience, I cannot confidently attribute this issue to any one factor. It is entirely plausible that the question of what makes a productive NFL running back is quite simple: more quality attempts leads to more yards. Future work on this topic may benefit from the addition of advanced metrics, such as contact in the backfield (which could be indicative of the offensive line quality of a team), or broken tackles. 
