@@ -15,6 +15,8 @@ I started this project as a way to apply my knowledge from DS 1000 and challenge
 
 I chose a linear regression model, as I wanted a simple way to use continuous data (independent variables) to predict a continuous variable (our dependent variable). This approach led to me dividing this project into four stages: Setup, Training, Plotting, and Conclusions. Setup will consist of light data cleaning and determining which factors will be relevant for our regression. After that, Training will involve of the linear regression, alongside testing and analyzing its performance. Next, Plotting will consist of visualizing our errors and residuals, along with graphing our independent variables and seeing how they performed in our regression. Finally, Conclusions will consist of my interpretation of the model, and my closing thoughts.
 
+So the question is, what predicts a player's rushing yards?
+
 # Stage 1: Setup
 
 Firstly, I loaded all necessary packages and read in my CSV file, consisting of all NFL rushing data. After that, I filtered for just players designated as running backs (RB) and removed any special characters from the ends of their name for clarity. (The characters dictated honors and awards, which is irrelevant to our experiment). 
@@ -200,6 +202,6 @@ rushing %>%
 ```
 
 # Stage 4: Conclusions
-Overall, all metrics indicated that my model was sound and accurate. Between a low RMSE and high R-squared, my model appears to successfully perform its role of predicting NFL rushing yards. However, it is important to note that the model performed better on 'worse' (less productive players), while struggling more for 'better' (more productive players). This may indicate that I was missing a factor that was not present in my dataset, that would explain what distinguishes these high performing players from the rest of the league. 
+Overall, all metrics indicated that my model was sound and accurate. Between a low RMSE and high R-squared, my model appears to successfully perform its goal of predicting a player's rushing yards, using the Rushing.Attempts and Rushing.Success.Rate factors. However, it is important to note that the model performed better on 'worse' (less productive players), while struggling more for 'better' (more productive players). This may indicate that I was missing a factor that was not present in my dataset, that would explain what distinguishes these high performing players from the rest of the league. 
 
 Additionally, the fact that I was only able to use two factors is an area of concern. A similar regression developed by a classmate regarding NFL receiving yards successfully integrated several more factors from their respective data set, including advanced metrics such as ADOT (Average Depth of Pass) and Broken Tackles. Between the limited data in my data set, the inherently less complicated role of running backs, and my own lack of data science experience, I cannot confidently attribute this issue to any one factor. It is entirely plausible that the question of what makes a productive NFL running back is quite simple: more quality attempts leads to more yards. Future work on this topic may benefit from the addition of advanced metrics, such as contact in the backfield (which could be indicative of the offensive line quality of a team), or broken tackles. 
